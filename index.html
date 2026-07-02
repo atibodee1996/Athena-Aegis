@@ -3421,73 +3421,126 @@ function sectorOf(ticker){return SECTOR_MAP[ticker]||SECTOR_MAP[ticker.replace('
    GOOGLE FINANCE WORKSPACE  (Phase 1 — UI/Integration only)
    Dashboard does NOT fetch or store Google Finance data.
    These functions only build URLs and open them in a new tab.
-   Extend GFW_EXCHANGE_MAP / GFW_IR_MAP here as new tickers are added.
+   Extend GFW_SYMBOL_MAP / IR_MAP here as new tickers are added.
    ══════════════════════════════════════════════════════════════ */
 
-/* Ticker → Google Finance exchange prefix.
-   Google Finance URL format: https://www.google.com/finance/quote/{TICKER}:{EXCHANGE}
-   Default fallback = NASDAQ (most common for US growth/tech names). */
-const GFW_EXCHANGE_MAP = {
-  'BRK.B':'NYSE',  V:'NYSE',    JPM:'NYSE',    COST:'NASDAQ',
-  ASML:'NASDAQ',   NVDA:'NASDAQ', GOOGL:'NASDAQ', AMZN:'NASDAQ',
-  MSFT:'NASDAQ',   META:'NASDAQ', AMD:'NASDAQ',  INTC:'NASDAQ',
-  SPGI:'NYSE',     NEE:'NYSE',   DELL:'NYSE',   RKLB:'NYSE', OKLO:'NYSE',
-  VOO:'NYSEARCA',  QQQ:'NASDAQ', QQQM:'NASDAQ', VTI:'NYSEARCA',
-  SCHD:'NYSEARCA', JEPQ:'NASDAQ', HDV:'NYSEARCA', EWJ:'NYSEARCA',
-  CEG:'NASDAQ',    GRID:'NASDAQ', INDA:'NASDAQ', SPCX:'NASDAQ',
-  TSMC:'NYSE', // ticker rename handled in googleFinanceSymbol_()
+/* ══════════════════════════════════════════════════════════════
+   GOOGLE FINANCE SYMBOL LAYER  (Phase 1.5)
+   Single source of truth for ticker → Google Finance symbol.
+   Every launcher in the app MUST call resolveGoogleFinanceSymbol()
+   instead of building URLs or checking exchanges directly.
+
+   Real data for all 9 current portfolio holdings (VOO, NVDA, GOOGL,
+   ASML, V, COST, BRK.B, CEG, AMZN), plus common reference tickers
+   for the search box / future holdings. No placeholders.
+   ══════════════════════════════════════════════════════════════ */
+const GFW_SYMBOL_MAP = {
+  // ── Current portfolio holdings (real data) ──
+  VOO:    'NYSEARCA:VOO',
+  NVDA:   'NASDAQ:NVDA',
+  GOOGL:  'NASDAQ:GOOGL',
+  ASML:   'NASDAQ:ASML',
+  V:      'NYSE:V',
+  COST:   'NASDAQ:COST',
+  'BRK.B':'NYSE:BRK.B',
+  CEG:    'NASDAQ:CEG',
+  AMZN:   'NASDAQ:AMZN',
+
+  // ── Common reference tickers (for search box / future holdings) ──
+  SPY:    'NYSEARCA:SPY',
+  QQQ:    'NASDAQ:QQQ',
+  QQQM:   'NASDAQ:QQQM',
+  VTI:    'NYSEARCA:VTI',
+  SCHD:   'NYSEARCA:SCHD',
+  JEPQ:   'NASDAQ:JEPQ',
+  HDV:    'NYSEARCA:HDV',
+  EWJ:    'NYSEARCA:EWJ',
+  INDA:   'NASDAQ:INDA',
+  SPCX:   'NASDAQ:SPCX',
+  GRID:   'NASDAQ:GRID',
+  MSFT:   'NASDAQ:MSFT',
+  META:   'NASDAQ:META',
+  AMD:    'NASDAQ:AMD',
+  INTC:   'NASDAQ:INTC',
+  JPM:    'NYSE:JPM',
+  UNH:    'NYSE:UNH',
+  SPGI:   'NYSE:SPGI',
+  TMO:    'NYSE:TMO',
+  NEE:    'NYSE:NEE',
+  DELL:   'NYSE:DELL',
+  RKLB:   'NYSE:RKLB',
+  OKLO:   'NYSE:OKLO',
+  TSMC:   'NYSE:TSM',  // ticker rename folded directly into the map
 };
 
-/* Ticker → { sec, ir } URLs. IR has no universal pattern, so unknown
-   tickers fall back to a Google search placeholder (per spec: Phase 1
-   allows placeholders when company data is unavailable). */
-const GFW_IR_MAP = {
-  NVDA:  'https://investor.nvidia.com/',
-  GOOGL: 'https://abc.xyz/investor/',
-  MSFT:  'https://www.microsoft.com/en-us/investor',
-  META:  'https://investor.fb.com/',
-  AMZN:  'https://ir.aboutamazon.com/',
-  'BRK.B':'https://www.berkshirehathaway.com/',
-  V:     'https://investor.visa.com/',
-  COST:  'https://investor.costco.com/',
-  ASML:  'https://www.asml.com/en/investors',
-  CEG:   'https://www.constellationenergy.com/investors.html',
-  SPGI:  'https://investor.spglobal.com/',
-  DELL:  'https://investors.delltechnologies.com/',
-  RKLB:  'https://investors.rocketlabusa.com/',
-  OKLO:  'https://investors.oklo.com/',
-};
-
-/* Resolve the ticker symbol Google Finance actually uses (handles renames) */
-function googleFinanceSymbol_(ticker){
-  const renameMap = { TSMC:'TSM' };
-  return renameMap[ticker] || ticker;
+/**
+ * resolveGoogleFinanceSymbol(ticker)
+ * THE single resolver for all Google Finance launchers.
+ * Returns the full "EXCHANGE:SYMBOL" string if mapped.
+ * If unmapped, returns the raw ticker so the app never crashes —
+ * callers that need to BLOCK on missing mappings (per governance
+ * req 6) must check GFW_SYMBOL_MAP[ticker] themselves before calling.
+ */
+function resolveGoogleFinanceSymbol(ticker){
+  if(!ticker) return '';
+  const t = ticker.trim().toUpperCase();
+  return GFW_SYMBOL_MAP[t] || t;
 }
 
-/** Open a ticker's Google Finance quote page in a new tab */
+/* Ticker → Investor Relations URL. Real IR pages for all 9 current
+   holdings. VOO is a Vanguard fund (no IR page), so it links to its
+   official Vanguard fund profile instead. Unmapped tickers fall back
+   to a Google search — this is an intentional, documented fallback,
+   not a placeholder for held tickers. */
+const IR_MAP = {
+  NVDA:   'https://investor.nvidia.com/',
+  GOOGL:  'https://abc.xyz/investor/',
+  AMZN:   'https://ir.aboutamazon.com/',
+  ASML:   'https://www.asml.com/en/investors',
+  V:      'https://investor.visa.com/',
+  COST:   'https://investor.costco.com/',
+  'BRK.B':'https://www.berkshirehathaway.com/',
+  CEG:    'https://www.constellationenergy.com/investors.html',
+  VOO:    'https://investor.vanguard.com/investment-products/etfs/profile/voo',
+
+  // Reference tickers (for search box use)
+  MSFT:   'https://www.microsoft.com/en-us/investor',
+  META:   'https://investor.fb.com/',
+  SPGI:   'https://investor.spglobal.com/',
+  DELL:   'https://investors.delltechnologies.com/',
+  RKLB:   'https://investors.rocketlabusa.com/',
+  OKLO:   'https://investors.oklo.com/',
+};
+
+/** Open a ticker's Google Finance quote page in a new tab.
+ *  Routes through resolveGoogleFinanceSymbol() — the single layer.
+ *  Blocks + warns instead of opening a wrong URL when unmapped (req 6). */
 function openGoogleFinance(ticker){
   if(!ticker) return;
   const t = ticker.trim().toUpperCase();
-  const symbol = googleFinanceSymbol_(t);
-  const exchange = GFW_EXCHANGE_MAP[t] || 'NASDAQ';
-  window.open(`https://www.google.com/finance/quote/${symbol}:${exchange}`, '_blank');
+  if(!GFW_SYMBOL_MAP[t]){
+    toast('⚠ Google Finance Mapping Missing');
+    return;
+  }
+  const symbol = resolveGoogleFinanceSymbol(t);
+  window.open(`https://www.google.com/finance/quote/${symbol}`, '_blank');
 }
 
-/** Open SEC EDGAR filings page for a ticker (works for most US-listed tickers) */
+/** Open SEC EDGAR filings page for a ticker.
+ *  Unchanged per spec — SEC launcher uses the raw ticker, not the resolver. */
 function openSECFiling(ticker){
   if(!ticker) return;
   const t = ticker.trim().toUpperCase();
   window.open(`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(t)}&type=10-K&dateb=&owner=include&count=40`, '_blank');
 }
 
-/** Open Investor Relations page — falls back to a search if not mapped */
+/** Open Investor Relations page — falls back to a search if not mapped. */
 function openInvestorRelations(ticker){
   if(!ticker) return;
   const t = ticker.trim().toUpperCase();
-  const url = GFW_IR_MAP[t];
+  const url = IR_MAP[t];
   if(url){ window.open(url, '_blank'); }
   else {
-    // Placeholder fallback per Phase 1 spec: use a search when IR URL unknown
     window.open(`https://www.google.com/search?q=${encodeURIComponent(t+' investor relations')}`, '_blank');
   }
 }
