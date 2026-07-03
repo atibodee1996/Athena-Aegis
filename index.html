@@ -246,7 +246,7 @@ body{background:var(--bg);font-family:var(--sans);color:var(--ink);min-height:10
 .holdings-tbl tbody tr:last-child{border-bottom:none}
 .holdings-tbl tbody tr:hover{background:var(--card2)}
 .holdings-tbl tbody td{padding:9px 10px;font-family:var(--mono);font-size:11px;vertical-align:middle;white-space:nowrap}
-.h-ticker{font-weight:700;font-size:12px}
+.h-ticker{font-weight:700;font-size:12px;display:flex;align-items:center;gap:5px}
 .h-cat-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
 .h-pnl-bar{height:2px;border-radius:1px;margin-top:3px;max-width:60px}
 .tfoot-row td{font-family:var(--mono);font-size:11px;font-weight:700;padding:9px 10px;background:var(--card2);border-top:2px solid var(--border2)}
@@ -743,7 +743,26 @@ body{background:var(--bg);font-family:var(--sans);color:var(--ink);min-height:10
   .gfw-action-btn{justify-content:center}
 }
 
-.dm-snapshot-row{.dm-snapshot-row{
+/* ── COMPANY LOGO (Part 2, Phase 1.7) ──────────────────────
+   Auto-loads via Clearbit. Dark-theme safe (white backing circle).
+   Falls back to a grey circle + first letter on load failure. */
+.stock-logo-wrap{
+  position:relative;width:20px;height:20px;flex-shrink:0;
+  border-radius:50%;overflow:hidden;background:#fff;
+  display:inline-flex;align-items:center;justify-content:center;
+  vertical-align:middle;
+}
+.stock-logo-img{
+  width:100%;height:100%;object-fit:contain;padding:2px;
+}
+.stock-logo-fallback{
+  display:none;position:absolute;inset:0;border-radius:50%;
+  background:var(--ink3);color:#fff;
+  align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9px;font-weight:700;
+}
+
+.dm-snapshot-row{.dm-snapshot-row{.dm-snapshot-row{
   padding:8px 0;border-top:1px solid var(--border);margin-top:6px;
 }
 .dm-snapshot-label{
@@ -1010,7 +1029,7 @@ body{background:var(--bg);font-family:var(--sans);color:var(--ink);min-height:10
 }
 .hcard-dot{width:8px;height:8px;border-radius:50%;margin-top:1px}
 .hcard-main{}
-.hcard-ticker{font-family:var(--mono);font-size:13px;font-weight:700;line-height:1.2}
+.hcard-ticker{font-family:var(--mono);font-size:13px;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:5px}
 .hcard-note-inline{font-family:var(--sans);font-size:9.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
 .hcard-price-col{text-align:right}
 .hcard-price{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink)}
@@ -1263,7 +1282,6 @@ body{background:var(--bg);font-family:var(--sans);color:var(--ink);min-height:10
       <div class="view-toggle">
         <button class="view-btn" id="vbtn-summary" onclick="switchPortView(&#39;summary&#39;,this)">สรุป</button>
         <button class="view-btn active" id="vbtn-holdings" onclick="switchPortView(&#39;holdings&#39;,this)">ถือ</button>
-        <button class="view-btn" id="vbtn-groups" onclick="switchPortView(&#39;groups&#39;,this)">หมวด</button>
       </div>
     </div>
     <div style="display:flex;gap:6px">
@@ -2081,11 +2099,6 @@ body{background:var(--bg);font-family:var(--sans);color:var(--ink);min-height:10
       </div>
     </div></div>
     </div>
-  </div>
-
-  <!-- VIEW: CATEGORY GROUPS (original, retained) -->
-  <div id="port-view-groups" style="display:none">
-    <div id="port-groups"></div>
   </div>
 
   <!-- hidden legacy element (keep for compatibility) -->
@@ -3099,16 +3112,58 @@ let sheetsUrl='';
 
 // ─── CATEGORY CONFIG ───
 // GPT/Gemini: add new categories here and in the modal <select>
+// ── ATHENA PORTFOLIO ROLE (Part 3, Phase 1.7) ──────────────────
+// These are ROLES in the Athena portfolio strategy, not industry
+// classifications. Internal `type` keys (growth/div/value/etc.) are
+// UNCHANGED — they remain the stored/synced identifier for each
+// holding (Governance: type is a cloud-synced field). Only the
+// DISPLAY labels below were renamed — pure UI change, zero impact
+// on Portfolio Calculation, Sync, or stored data schema.
 const CATS = {
-  growth:   {label:'หุ้นเติบโต',   en:'Growth',    dot:'#1a5cad', header:'#eef4ff', dark:'#0d1e3a'},
-  div:      {label:'หุ้นปันผล',    en:'Dividend',   dot:'#1a7a4a', header:'#edf7f1', dark:'#0d2619'},
-  value:    {label:'หุ้นคุณค่า',   en:'Value',     dot:'#7c3a9a', header:'#f5eeff', dark:'#1e0d2e'},
-  bluechip: {label:'หุ้นบลูชิพ',   en:'Blue-chip',  dot:'#0e6e8a', header:'#e8f7fb', dark:'#0a2030'},
-  cycle:    {label:'หุ้นวัฏจักร',  en:'Cyclical',   dot:'#b56e0d', header:'#fdf4e7', dark:'#2a1c08'},
-  def:      {label:'หุ้นตั้งรับ',  en:'Defensive',  dot:'#c03c2a', header:'#fef0ee', dark:'#2a100e'},
-  exit:     {label:'รอขายคืนทุน', en:'Exit',       dot:'#888',    header:'#f0f0f0', dark:'#1a1a1a'},
-  wait:     {label:'รอเข้าใหม่',  en:'Watchlist',  dot:'#aaa',    header:'#f5f5f5', dark:'#1e1e1e'},
+  growth:   {label:'หุ้นเติบโต',    en:'Mega Trend',           dot:'#1a5cad', header:'#eef4ff', dark:'#0d1e3a'},
+  div:      {label:'หุ้นปันผล',     en:'Dividend Engine',      dot:'#1a7a4a', header:'#edf7f1', dark:'#0d2619'},
+  value:    {label:'หุ้นคุณค่า',    en:'Crisis Buyer',         dot:'#7c3a9a', header:'#f5eeff', dark:'#1e0d2e'},
+  bluechip: {label:'หุ้นบลูชิพ',    en:'Core Compounder',      dot:'#0e6e8a', header:'#e8f7fb', dark:'#0a2030'},
+  cycle:    {label:'หุ้นวัฏจักร',   en:'Infrastructure',       dot:'#b56e0d', header:'#fdf4e7', dark:'#2a1c08'},
+  def:      {label:'หุ้นตั้งรับ',   en:'Defensive Compounder', dot:'#c03c2a', header:'#fef0ee', dark:'#2a100e'},
+  exit:     {label:'รอขายคืนทุน',  en:'Exit Position',        dot:'#888',    header:'#f0f0f0', dark:'#1a1a1a'},
+  wait:     {label:'รอเข้าใหม่',   en:'Optionality',          dot:'#aaa',    header:'#f5f5f5', dark:'#1e1e1e'},
 };
+
+// ── COMPANY LOGO DOMAIN MAP (Part 2, Phase 1.7) ─────────────────
+// Ticker → company domain, used to fetch a logo via Clearbit.
+// <img> tags are not subject to CORS restrictions, so this works
+// reliably regardless of hosting (file://, GitHub Pages, etc).
+// Real domains for all 9 current portfolio holdings — no placeholders.
+const LOGO_DOMAIN_MAP = {
+  VOO:'vanguard.com', NVDA:'nvidia.com', GOOGL:'abc.xyz',
+  ASML:'asml.com', V:'visa.com', COST:'costco.com',
+  'BRK.B':'berkshirehathaway.com', CEG:'constellationenergy.com',
+  AMZN:'amazon.com',
+  // Reference tickers (search box / future holdings)
+  MSFT:'microsoft.com', META:'meta.com', AMD:'amd.com', INTC:'intel.com',
+  JPM:'jpmorganchase.com', UNH:'unitedhealthgroup.com', SPGI:'spglobal.com',
+  TMO:'thermofisher.com', NEE:'nexteraenergy.com', DELL:'dell.com',
+  RKLB:'rocketlabusa.com', OKLO:'oklo.com',
+};
+
+/** Returns HTML for a stock logo with automatic fallback to a
+ *  grey circle + first letter if the image fails to load.
+ *  Broken image = 0: onerror always resolves to a valid fallback. */
+function renderStockLogo(ticker){
+  const t = (ticker||'').toUpperCase();
+  const domain = LOGO_DOMAIN_MAP[t];
+  const letter = t.charAt(0)||'?';
+  if(!domain){
+    // No domain mapped — go straight to fallback, no broken request
+    return `<span class="stock-logo-wrap"><span class="stock-logo-fallback" style="display:flex">${letter}</span></span>`;
+  }
+  return `<span class="stock-logo-wrap">
+    <img class="stock-logo-img" src="https://logo.clearbit.com/${domain}" alt=""
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <span class="stock-logo-fallback">${letter}</span>
+  </span>`;
+}
 
 // ─── UTILS ───
 function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
@@ -3163,8 +3218,11 @@ function save(){
   }
 }
 function load(){
-  // migrate from v2
-  const raw=localStorage.getItem('athena_v3')||localStorage.getItem('athena_v2');
+  // v2 legacy fallback removed (Phase 1.7 Part 5) — obsolete migration
+  // path from a schema retired many versions ago. athena_v3 is now
+  // the sole read source. Does not affect athena_v3/athena_decisions,
+  // which remain in place per Part 6 dependency analysis (load-bearing).
+  const raw=localStorage.getItem('athena_v3');
   if(!raw){initDefaults();return;}
   try{
     const d=JSON.parse(raw);
@@ -3599,9 +3657,7 @@ function switchPortView(view,btn){
   btn.classList.add('active');
   document.getElementById('port-view-summary').style.display=view==='summary'?'':'none';
   document.getElementById('port-view-holdings').style.display=view==='holdings'?'':'none';
-  document.getElementById('port-view-groups').style.display=view==='groups'?'':'none';
   if(view==='holdings')renderHoldings();
-  if(view==='groups')renderPortfolio();
 }
 
 /* ── KPI STRIP ── */
@@ -3721,7 +3777,7 @@ function renderHoldings(){
     const barW=Math.min(Math.abs(st.gainLossPct||0)/50*100,100);
     const barColor=st.gainLoss>=0?'var(--pos)':'var(--neg)';
     return`<tr>
-      <td><div class="h-ticker"><span class="h-cat-dot" style="background:${cat.dot}"></span>${st.ticker}</div><div style="font-family:var(--sans);font-size:9px;color:var(--ink3);margin-top:2px">${st.note?st.note.slice(0,30)+(st.note.length>30?'…':''):''}</div></td>
+      <td><div class="h-ticker">${renderStockLogo(st.ticker)}<span class="h-cat-dot" style="background:${cat.dot}"></span>${st.ticker}</div><div style="font-family:var(--sans);font-size:9px;color:var(--ink3);margin-top:2px">${st.note?st.note.slice(0,30)+(st.note.length>30?'…':''):''}</div></td>
       <td>${fmt(st.shares,4)}</td>
       <td>$${fmt(st.costPrice,2)}<br><span style="font-size:9px;color:var(--ink3)">${fmtB((st.costPrice||0)*fx)}</span></td>
       <td>${st.currentPrice>0?'$'+fmt(st.currentPrice,2):'—'}<br><span style="font-size:9px;color:var(--ink3)">${st.currentPrice>0?fmtB(st.currentPrice*fx):''}</span></td>
@@ -3778,7 +3834,7 @@ function renderHcards(rows){
       <div class="hcard-top" onclick="toggleHcard('${st.id}')">
         <div class="hcard-dot" style="background:${cat.dot};margin-top:3px"></div>
         <div class="hcard-main">
-          <div class="hcard-ticker">${st.ticker}</div>
+          <div class="hcard-ticker">${renderStockLogo(st.ticker)} ${st.ticker}</div>
           ${st.note?`<div class="hcard-note-inline">${st.note.slice(0,40)+(st.note.length>40?'…':'')}</div>`:''}
         </div>
         <div class="hcard-price-col">
@@ -4238,32 +4294,6 @@ function exportText(){
   toast('สร้าง Text Report ✓');
 }
 
-/* ── ORIGINAL renderPortfolio (category groups view, retained) ── */
-function renderPortfolio(){
-  const el=document.getElementById('port-groups');
-  if(!el)return;
-  if(!stocks.length){el.innerHTML='<div class="empty">ยังไม่มีหุ้น</div>';return;}
-  const totalVal=stocks.reduce((s,st)=>s+stockValue(st),0);
-  const catOrder=['growth','div','value','bluechip','cycle','def','exit','wait'];
-  const dark=isDark();
-  let html='';
-  catOrder.forEach(catKey=>{
-    const cat=CATS[catKey];const group=stocks.filter(s=>s.type===catKey);
-    if(!group.length)return;
-    const groupVal=group.reduce((s,st)=>s+stockValue(st),0);
-    const pct=totalVal>0?groupVal/totalVal*100:0;
-    const headerBg=dark?cat.dark:cat.header;
-    html+=`<div class="cat-group"><div class="cat-group-header" style="background:${headerBg};border-color:${cat.dot}33"><div class="cat-group-dot" style="background:${cat.dot}"></div><div class="cat-group-name" style="color:${cat.dot}">${cat.label} <span style="font-weight:400;opacity:.7">${cat.en}</span></div><div class="cat-group-count" style="color:${cat.dot}">${group.length} ตัว</div><div class="cat-group-val" style="color:${cat.dot}">${fmtB(groupVal)} <span style="font-weight:400;opacity:.7">(${fmt(pct,1)}%)</span></div></div><div class="cat-tbl-wrap"><table><thead><tr><th>หุ้น</th><th>Thesis</th><th>จำนวน</th><th>ทุน/หุ้น</th><th>ราคา</th><th>มูลค่า ฿</th><th>+/−%</th><th>สัดส่วน/เป้า</th><th>สุขภาพ</th><th></th></tr></thead><tbody>`;
-    group.sort((a,b)=>stockValue(b)-stockValue(a)).forEach(st=>{
-      const v=stockValue(st),c=(st.shares||0)*(st.costPrice||0)*fx,pnl=v-c;
-      const pnlPct=c>0?pnl/c*100:null,actualPct=totalVal>0?v/totalVal*100:0;
-      const h=stockHealth(st,totalVal);
-      html+=`<tr><td><div class="td-ticker" style="color:${cat.dot}">${st.ticker}</div></td><td><div class="td-note">${st.note||''}</div></td><td>${fmt(st.shares,4)}</td><td>${fmt(st.costPrice,2)}</td><td>${st.currentPrice>0?fmt(st.currentPrice,2):'—'}</td><td>${v>0?fmtB(v):'—'}</td><td class="${pnlPct!==null?(pnlPct>=0?'pos':'neg'):''}"> ${pnlPct!==null?(pnlPct>=0?'+':'')+fmt(pnlPct,1)+'%':'—'}</td><td class="${actualPct>(st.targetPct||0)&&(st.targetPct||0)>0?'neg':actualPct<(st.targetPct||0)*0.8&&(st.targetPct||0)>0?'warn':''}">${fmt(actualPct,1)}% / ${st.targetPct||0}%</td><td><span class="health-pill health-${h.tone}">${h.score}%</span><span class="health-note">${h.note}</span></td><td style="display:flex;flex-direction:column;gap:3px;padding-top:10px"><button class="act-btn" onclick="editStock('${st.id}')">แก้ไข</button><button class="act-btn" style="color:var(--neg)" onclick="deleteStock('${st.id}')">ลบ</button></td></tr>`;
-    });
-    html+=`</tbody></table></div></div>`;
-  });
-  el.innerHTML=html||'<div class="empty">ไม่มีหุ้น</div>';
-}
 // ─── NOTES PAGE ───
 function switchNoteTab(tab,btn){
   document.querySelectorAll('.note-tab').forEach(t=>t.classList.remove('active'));
